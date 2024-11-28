@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { JigsawStack } from 'jigsawstack'
-import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
-import ReactMarkdown from 'react-markdown'
+import { XCircleIcon } from '@heroicons/react/24/solid'
 
-
-const jigsaw = JigsawStack({ apiKey: 'sk_d1feac42607afc7e2defe5132d9eaeacc078a7de100b3462e31a6c1c6da674fef85f4b63a2b33088fb775c9c4bd63c497d84e952903f1e082482a3a343074bc7024kholqflnodWG5LpCcx' })
+//API KEY
+const jigsaw = JigsawStack({ 
+  apiKey: 'your-api-key' 
+})
 
 type SavedPrompt = {
   id: string;
@@ -19,6 +20,7 @@ type CreatePromptParams = {
   inputs: Array<{ key: string; optional: boolean; initial_value?: string }>;
   return_prompt: string;
   prompt_guard?: Array<string>;
+  stream: boolean;
 };
 
 type RunPromptParams = {
@@ -111,46 +113,55 @@ export default function Home() {
   const [promptGuard, setPromptGuard] = useState<string[]>([])
 
   const handleRunPrompt = async (promptToRun: string, inputToUse: string) => {
-    setLoading(true)
-    setError('')
+    setLoading(true);
+    setError('');
+    setResult(''); // Clear previous result
+
     try {
       const returnPromptValue = `Return the result in ${returnPrompt} format`;
 
-      // Step 1: Create the prompt
-      const createParams: CreatePromptParams = {
+      // Run the prompt and receive a result object
+      const resp = await jigsaw.prompt_engine.run_prompt_direct({
         prompt: promptToRun,
-        inputs: [{ key: "input", optional: false, initial_value: inputToUse }],
+        stream: true,
         return_prompt: returnPromptValue,
-        prompt_guard: promptGuard.length > 0 ? promptGuard : undefined,
-      };
+        use_internet: true,
+      } as any);
 
-      const createResponse = await jigsaw.prompt_engine.create(createParams);
+      // Log `resp` for debugging to confirm structure
+      console.log("Response:", resp);
 
-      if (!createResponse.prompt_engine_id) {
-        throw new Error('Failed to create prompt engine');
+      // Ensure `resp.result` exists and handle it as either an async iterable or a string
+      const result = resp.result as AsyncIterable<string> | string;
+
+      if (typeof result === 'string') {
+        // If `result` is a complete string, set it directly
+        setResult(result);
+      } else if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
+        // If `result` is an async iterable (stream), process each chunk
+        let text = "";
+        for await (const chunk of result) {
+          console.log("Chunk received:", chunk); // Log each chunk for debugging
+          text += chunk;
+          setResult((prevResult) => prevResult + chunk); // Update result incrementally
+        }
+        setResult(text); // Final accumulated result
+      } else {
+        throw new Error('Unexpected response format');
       }
 
-      console.log('Prompt engine created:', createResponse.prompt_engine_id);
-
-      // Step 2: Run the prompt
-      const runParams: RunPromptParams = {
-        id: createResponse.prompt_engine_id,
-        input_values: { input: inputToUse }
-      };
-
-      const runResponse = await jigsaw.prompt_engine.run(runParams);
-
-      if (!runResponse.success) {
-        throw new Error('Failed to run prompt');
-      }
-
-      setResult(runResponse.result as string);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while processing the prompt');
       console.error(err);
     }
     setLoading(false);
-  };
+};
+
+
+
+
+
+  
 
   const handleSavePrompt = () => {
     if (prompt.trim() === '') {
