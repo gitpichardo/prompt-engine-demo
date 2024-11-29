@@ -1,13 +1,13 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { JigsawStack } from 'jigsawstack'
-import { XCircleIcon } from '@heroicons/react/24/solid'
+import { useState } from "react";
+import { JigsawStack } from "jigsawstack";
+import { XCircleIcon } from "@heroicons/react/24/solid";
 
 //API KEY
-const jigsaw = JigsawStack({ 
-  apiKey: 'your-api-key' 
-})
+const jigsaw = JigsawStack({
+  apiKey: process.env.NEXT_PUBLIC_JIGSAW_API_KEY!,
+});
 
 type SavedPrompt = {
   id: string;
@@ -55,7 +55,6 @@ const formatJSON = (json: string) => {
   }
 };
 
-
 const JSONDisplay = ({ data }: { data: string }) => {
   try {
     const jsonData = JSON.parse(data);
@@ -70,15 +69,22 @@ const JSONDisplay = ({ data }: { data: string }) => {
 };
 
 const MarkdownDisplay = ({ data }: { data: string }) => {
-  
   const htmlContent = data
-    .replace(/#{1,6}\s?([^\n]+)/g, (match, p1) => `<h${match.trim().length}>${p1}</h${match.trim().length}>`)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/_(.+?)_/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>');
+    .replace(
+      /#{1,6}\s?([^\n]+)/g,
+      (match, p1) => `<h${match.trim().length}>${p1}</h${match.trim().length}>`
+    )
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/_(.+?)_/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code>$1</code>")
+    .replace(/\n/g, "<br>");
 
-  return <div dangerouslySetInnerHTML={{ __html: htmlContent }} className="markdown-content" />;
+  return (
+    <div
+      dangerouslySetInnerHTML={{ __html: htmlContent }}
+      className="markdown-content"
+    />
+  );
 };
 
 const HTMLDisplay = ({ data }: { data: string }) => {
@@ -91,11 +97,11 @@ const HTMLDisplay = ({ data }: { data: string }) => {
 
 const formatResult = (result: string, format: string) => {
   switch (format) {
-    case 'json':
+    case "json":
       return <JSONDisplay data={result} />;
-    case 'markdown':
+    case "markdown":
       return <MarkdownDisplay data={result} />;
-    case 'html':
+    case "html":
       return <HTMLDisplay data={result} />;
     default:
       return <pre className="whitespace-pre-wrap break-words">{result}</pre>;
@@ -103,98 +109,83 @@ const formatResult = (result: string, format: string) => {
 };
 
 export default function Home() {
-  const [prompt, setPrompt] = useState('')
-  const [input, setInput] = useState('')
-  const [result, setResult] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([])
-  const [returnPrompt, setReturnPrompt] = useState(returnPromptOptions[0].value)
-  const [promptGuard, setPromptGuard] = useState<string[]>([])
+  const [prompt, setPrompt] = useState("");
+  const [input, setInput] = useState("");
+  const [result, setResult] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+  const [returnPrompt, setReturnPrompt] = useState(
+    returnPromptOptions[0].value
+  );
+  const [promptGuard, setPromptGuard] = useState<string[]>([]);
 
   const handleRunPrompt = async (promptToRun: string, inputToUse: string) => {
     setLoading(true);
-    setError('');
-    setResult(''); // Clear previous result
+    setError("");
+    setResult(""); // Clear previous result
 
     try {
       const returnPromptValue = `Return the result in ${returnPrompt} format`;
 
-      // Run the prompt and receive a result object
       const resp = await jigsaw.prompt_engine.run_prompt_direct({
         prompt: promptToRun,
         stream: true,
         return_prompt: returnPromptValue,
         use_internet: true,
-      } as any);
+      });
 
-      // Log `resp` for debugging to confirm structure
-      console.log("Response:", resp);
-
-      // Ensure `resp.result` exists and handle it as either an async iterable or a string
-      const result = resp.result as AsyncIterable<string> | string;
-
-      if (typeof result === 'string') {
-        // If `result` is a complete string, set it directly
-        setResult(result);
-      } else if (result && typeof result === 'object' && Symbol.asyncIterator in result) {
-        // If `result` is an async iterable (stream), process each chunk
-        let text = "";
-        for await (const chunk of result) {
-          console.log("Chunk received:", chunk); // Log each chunk for debugging
-          text += chunk;
-          setResult((prevResult) => prevResult + chunk); // Update result incrementally
-        }
-        setResult(text); // Final accumulated result
-      } else {
-        throw new Error('Unexpected response format');
+      for await (const chunk of resp) {
+        console.log(chunk);
+        setResult((prev) => prev + chunk); // Update result incrementally
       }
-
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while processing the prompt');
+      setError(
+        err instanceof Error
+          ? err.message
+          : "An error occurred while processing the prompt"
+      );
       console.error(err);
     }
     setLoading(false);
-};
-
-
-
-
-
-  
+  };
 
   const handleSavePrompt = () => {
-    if (prompt.trim() === '') {
-      setError('Please enter a prompt before saving')
-      return
+    if (prompt.trim() === "") {
+      setError("Please enter a prompt before saving");
+      return;
     }
     const newPrompt: SavedPrompt = {
       id: Date.now().toString(),
       prompt: prompt,
       input: input,
-    }
-    setSavedPrompts([...savedPrompts, newPrompt])
-    setPrompt('')
-    setInput('')
-  }
+    };
+    setSavedPrompts([...savedPrompts, newPrompt]);
+    setPrompt("");
+    setInput("");
+  };
 
   const handlePromptGuardChange = (option: string) => {
-    setPromptGuard(prev => 
-      prev.includes(option) 
-        ? prev.filter(item => item !== option)
+    setPromptGuard((prev) =>
+      prev.includes(option)
+        ? prev.filter((item) => item !== option)
         : [...prev, option]
-    )
-  }
+    );
+  };
 
   return (
     <main className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background text-foreground">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Groq + JigsawStack: 100x speed on every prompt</h1>
+        <h1 className="text-3xl font-bold mb-8">
+          Groq + JigsawStack: 100x speed on every prompt
+        </h1>
         <div className="bg-gray-100 dark:bg-gray-800 shadow sm:rounded-lg p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Create or Run a Prompt</h2>
           <div className="space-y-4">
             <div>
-              <label htmlFor="prompt" className="block text-sm font-medium">Prompt Template</label>
+              <label htmlFor="prompt" className="block text-sm font-medium">
+                Prompt Template
+              </label>
               <input
                 type="text"
                 id="prompt"
@@ -205,7 +196,9 @@ export default function Home() {
               />
             </div>
             <div>
-              <label htmlFor="input" className="block text-sm font-medium">Input Value</label>
+              <label htmlFor="input" className="block text-sm font-medium">
+                Input Value
+              </label>
               <input
                 type="text"
                 id="input"
@@ -216,22 +209,31 @@ export default function Home() {
               />
             </div>
             <div>
-              <label htmlFor="returnPrompt" className="block text-sm font-medium">Return Format</label>
+              <label
+                htmlFor="returnPrompt"
+                className="block text-sm font-medium"
+              >
+                Return Format
+              </label>
               <select
                 id="returnPrompt"
                 className="mt-1 block w-full border border-gray-300 dark:border-gray-700 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 value={returnPrompt}
                 onChange={(e) => setReturnPrompt(e.target.value)}
               >
-                {returnPromptOptions.map(option => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                {returnPromptOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Prompt Guard Options</label>
+              <label className="block text-sm font-medium mb-2">
+                Prompt Guard Options
+              </label>
               <div className="space-y-2">
-                {promptGuardOptions.map(option => (
+                {promptGuardOptions.map((option) => (
                   <label key={option} className="flex items-center">
                     <input
                       type="checkbox"
@@ -239,7 +241,9 @@ export default function Home() {
                       onChange={() => handlePromptGuardChange(option)}
                       className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
                     />
-                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-200">{option}</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                      {option}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -265,8 +269,18 @@ export default function Home() {
           <div className="bg-yellow-50 dark:bg-yellow-900 border-l-4 border-yellow-400 p-4 mb-8">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                <svg
+                  className="h-5 w-5 text-yellow-400"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <div className="ml-3">
@@ -282,10 +296,15 @@ export default function Home() {
           <div className="bg-red-50 dark:bg-red-900 border-l-4 border-red-400 p-4 mb-8">
             <div className="flex">
               <div className="flex-shrink-0">
-                <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
+                <XCircleIcon
+                  className="h-5 w-5 text-red-400"
+                  aria-hidden="true"
+                />
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-700 dark:text-red-200">{error}</p>
+                <p className="text-sm text-red-700 dark:text-red-200">
+                  {error}
+                </p>
               </div>
             </div>
           </div>
@@ -293,7 +312,9 @@ export default function Home() {
 
         {result && (
           <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg p-6 mb-8">
-            <h2 className="text-xl font-semibold mb-4">Result ({returnPrompt} format)</h2>
+            <h2 className="text-xl font-semibold mb-4">
+              Result ({returnPrompt} format)
+            </h2>
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md overflow-auto max-h-96">
               {formatResult(result, returnPrompt)}
             </div>
@@ -305,17 +326,26 @@ export default function Home() {
             <h2 className="text-xl font-semibold mb-4">Saved Prompts</h2>
             <ul className="space-y-4">
               {savedPrompts.map((savedPrompt) => (
-                <li key={savedPrompt.id} className="flex flex-col space-y-2 p-4 bg-white dark:bg-gray-700 rounded-lg shadow">
+                <li
+                  key={savedPrompt.id}
+                  className="flex flex-col space-y-2 p-4 bg-white dark:bg-gray-700 rounded-lg shadow"
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Prompt:</span>
-                    <span className="text-sm truncate flex-1 ml-2">{savedPrompt.prompt}</span>
+                    <span className="text-sm truncate flex-1 ml-2">
+                      {savedPrompt.prompt}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Input:</span>
-                    <span className="text-sm truncate flex-1 ml-2">{savedPrompt.input}</span>
+                    <span className="text-sm truncate flex-1 ml-2">
+                      {savedPrompt.input}
+                    </span>
                   </div>
                   <button
-                    onClick={() => handleRunPrompt(savedPrompt.prompt, savedPrompt.input)}
+                    onClick={() =>
+                      handleRunPrompt(savedPrompt.prompt, savedPrompt.input)
+                    }
                     className="mt-2 w-full inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     Run This Prompt
@@ -327,5 +357,5 @@ export default function Home() {
         )}
       </div>
     </main>
-  )
+  );
 }
